@@ -1,14 +1,14 @@
 type stype
   = TVar of int
   | TFun of stype * stype
-  | TCon of stype list
+  | TCon of string * stype list
 
-type overtype = OverType of (string * stype) list * stype
-type context = (string * int) list 
+type context = (string * int) list
+type overtype = OverType of context * stype
 type polytype = Forall of int list * context * stype
 
 type expr
-  = Var of string
+  = Var of int
   | Lam of string * expr
   | App of expr * expr
   | Let of string * expr * expr
@@ -35,3 +35,7 @@ type toplevel
   = Expr of exprdecl
   | Class of classdecl
   | Instance of instdecl
+
+type tcontext = {
+    ve : polytype list
+  }

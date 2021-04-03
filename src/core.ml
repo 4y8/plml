@@ -1,6 +1,6 @@
 type typeF
   = TVar of int
-  | Forall of typeF
+  | Forall of int list * typeF
   | TFun of typeF * typeF
 
 type coreF
@@ -9,7 +9,5 @@ type coreF
   | App of coreF * coreF
   | TLam of coreF
   | TApp of coreF * typeF
-
-type valueF
-  = VLam of typeF * coreF
-  | VTLam of coreF
+  | Proj of int * int * coreF
+  | Dict of coreF list
