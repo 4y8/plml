@@ -1,5 +1,8 @@
 open Syntax
 
+exception Occurs_check
+exception Unify_error
+
 let ntvar = ref 0
 let newtvar () = let n = !ntvar in ntvar := n + 1; n
 
@@ -26,40 +29,69 @@ let rec wrap_tapp e = function
 let rec app_subst_stype s =
   let aux = app_subst_stype s in
   function
-    TFun (l, r) -> TFun (app_subst_stype s l, app_subst_stype s r)
+    TFun (l, r) -> TFun (aux l, aux r)
   | TCon (v, l) -> TCon (v, List.map aux l)
   | TVar n -> match List.assoc_opt n s with
                 None -> TVar n
               | Some t -> t
 
-let rec free_tvar_type bnd = function
+let app_subst_scheme s (Forall (b, c, t)) =
+  let s = List.filter (fun (f, _) -> not (List.mem f b)) s in
+  Forall (b, c, app_subst_stype s t)
+
+let app_subst_ctx =
+  let rec aux acc s = function
+      [] -> List.rev acc
+    | (v, t) :: tl -> aux ((v, app_subst_scheme s t) :: acc) s tl
+  in aux []
+
+let app_subst_env s {vctx} =
+  {vctx = app_subst_ctx s vctx}
+
+let rec app_subst_expr s = function
+    Core.Var v -> Core.Var v
+  | Core.Deb n -> Core.Deb n
+  | Core.App (l, r) -> Core.App (app_subst_expr s l, app_subst_expr s r)
+  | Core.Lam (v, t, e) -> Core.Lam (v, app_subst_stype s t, app_subst_expr s e)
+  | Core.TLam (n, e) ->
+     Core.TLam (n, app_subst_expr (Common.remove_assoc_all n s) e)
+  | Core.TApp (e, t) -> Core.TApp (app_subst_expr s e, app_subst_stype s t)
+  | Core.DVar (v, t) -> Core.DVar (v, app_subst_stype s t)
+  | Core.Dict l -> Core.Dict (List.map (app_subst_expr s) l)
+  | Core.DLam ((v, t), e) ->
+     Core.DLam ((v, app_subst_stype s t), app_subst_expr s e)
+  | Core.Proj (i, n, e) -> Core.Proj (i, n, app_subst_expr s e)
+
+let (@@) s s' =
+  let v, t = List.split s' in
+  let t = List.map (app_subst_stype s) t in
+  (List.combine v t) @ s
+
+let rec ftv_type bnd = function
     TVar v when List.mem v bnd -> []
   | TVar v -> [v]
-  | TFun (l, r) -> free_tvar_type bnd l @ free_tvar_type bnd r
-  | TCon (_, t) -> List.fold_left (@) [] (List.map (free_tvar_type bnd) t)
+  | TFun (l, r) -> ftv_type bnd l @ ftv_type bnd r
+  | TCon (_, t) -> List.fold_left (@) [] (List.map (ftv_type bnd) t)
 
-let free_tvar_expr =
+let ftv_expr =
   let rec aux bnd = function
-      Core.TVar v when List.mem v bnd -> []
-    | Core.TVar v -> [v]
-    | Core.App (l, r) -> aux bnd l @ aux bnd r
-    | Core.Lam (_, t, e) -> free_tvar_type bnd t @ aux bnd e
+      Core.App (l, r) -> aux bnd l @ aux bnd r
+    | Core.Lam (_, t, e) -> ftv_type bnd t @ aux bnd e
     | Core.TLam (v, e) -> aux (v :: bnd) e
-    | Core.DLam (t, e)
-    | Core.TApp (e, t) -> aux bnd e @ free_tvar_type bnd t
+    | Core.DLam ((_, t), e)
+    | Core.TApp (e, t) -> aux bnd e @ ftv_type bnd t
     | Core.Var _
     | Core.Deb _ -> []
     | Core.Proj (_, _, e) -> aux bnd e
     | Core.Dict l -> List.fold_left (@) [] (List.map (aux bnd) l)
-    | Core.DVar t -> free_tvar_type bnd t
+    | Core.DVar (_, t) -> ftv_type bnd t
   in aux []
 
 let free_dvar =
   let rec aux bnd = function
-      Core.DVar t when List.mem t bnd -> []
-    | Core.DVar t -> [t]
+      Core.DVar (s, t) when List.mem (s, t) bnd -> []
+    | Core.DVar (s, t) -> [s, t]
     | Core.DLam (t, e) -> aux (t :: bnd) e
-    | Core.TVar _
     | Core.Deb _
     | Core.Var _ -> []
     | Core.Proj (_, _, e)
@@ -70,24 +102,35 @@ let free_dvar =
     | Core.Dict l -> List.fold_left (@) [] (List.map (aux bnd) l)
   in aux []
 
-let inst e t =
-  let fvt = free_tvar_expr e in
-  let fvd = free_dvar e in
-  
+let rec unify t t' =
+  let bind v t =
+    if List.mem v (ftv_type [] t) then raise Occurs_check
+    else [v, t]
+  in
+  match t, t' with
+    TCon (v, l), TCon (v', l') when v = v' ->
+     List.fold_left (@@) [] (List.map2 unify l l')
+  | TFun (l, r), TFun (l', r') ->
+     let s = unify l l' in
+     let s' = unify (app_subst_stype s r) (app_subst_stype s r') in
+     s @@ s'
+  | t, TVar v | TVar v, t -> bind v t
+  | _ -> raise Unify_error
+
+let inst v (Forall (b, c, t)) =
+  let l = List.map (fun _ -> newtvar ()) b in
+  let ta = (List.map (fun v -> TVar v) l) in
+  let s = List.combine b ta in
+  wrap_tapp (wrap_app (Core.Var v)
+               (List.map (fun (v, t) -> Core.DVar (v, t)) c)) ta,
+  app_subst_stype s t
 
 let rec infer_expr env = function
-    Var v as e ->
-     match List.assoc_opt v env.lve with
-       None ->
-       let OverType (d, t), e, s = infer_over env e in
-       t, wrap_app e, s
-     | Some t -> t, Core.Var v, []
-and infer_over env = function
-    Var _ as e ->
-    let Forall (v, c, t), e, _ = infer_poly env e in
-    let s = List.map (fun t -> t, TVar (newtvar ())) v in
-    let _, l = List.split s in
-    OverType (c, app_subst_stype s t), wrap_tapp e l, []
-and infer_poly env = function
-    Var v ->
-    List.assoc v env.ve, Core.Var v, []
+    Var v -> let e, t = inst v (List.assoc v env.vctx) in
+             e, t, []
+  | App (e, e') ->
+     let e, t, s = infer_expr env e in
+     let e', t', s' = infer_expr (app_subst_env s env) e' in
+     let tv = TVar (newtvar ()) in
+     let s = (unify (app_subst_stype s t) (TFun (t', tv))) @@ s' @@ s in
+     Core.App (e, e'), app_subst_stype s tv, s

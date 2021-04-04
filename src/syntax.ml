@@ -4,8 +4,7 @@ type stype
   | TCon of string * stype list
 
 type context = (string * stype) list
-type overtype = OverType of context * stype
-type polytype = Forall of int list * context * stype
+type scheme = Forall of int list * context * stype
 
 type expr
   = Var of string
@@ -36,8 +35,6 @@ type toplevel
   | Class of classdecl
   | Instance of instdecl
 
-type tcontext = {
-    ve : (string * polytype) list;
-    ie : (string * polytype) list;
-    lie : (stype * stype) list;
+type env = {
+    vctx : (string * scheme) list;
   }
