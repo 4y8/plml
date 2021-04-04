@@ -1,13 +1,14 @@
-type typeF
-  = TVar of int
-  | Forall of int list * typeF
-  | TFun of typeF * typeF
+open Syntax
 
-type coreF
-  = Var of int
-  | Lam of typeF * coreF
-  | App of coreF * coreF
-  | TLam of coreF
-  | TApp of coreF * typeF
-  | Proj of int * int * coreF
-  | Dict of coreF list
+type coreIR
+  = Var of string
+  | Deb of int
+  | Lam of string * stype * coreIR
+  | App of coreIR * coreIR
+  | TVar of int
+  | TLam of int * coreIR
+  | TApp of coreIR * stype
+  | Proj of int * int * coreIR
+  | Dict of coreIR list
+  | DLam of stype * coreIR
+  | DVar of stype
