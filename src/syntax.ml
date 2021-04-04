@@ -2,9 +2,12 @@ type stype
   = TVar of int
   | TFun of stype * stype
   | TCon of string * stype list
+[@@deriving show]
 
 type context = (string * stype) list
+[@@deriving show]
 type scheme = Forall of int list * context * stype
+[@@deriving show]
 
 type expr
   = Var of string

@@ -5,9 +5,11 @@ type coreIR
   | Deb of int
   | Lam of string * stype * coreIR
   | App of coreIR * coreIR
+  | Let of string * coreIR * coreIR
   | TLam of int * coreIR
   | TApp of coreIR * stype
   | Proj of int * int * coreIR
   | Dict of coreIR list
   | DLam of (string * stype) * coreIR
   | DVar of string * stype
+[@@deriving show]
