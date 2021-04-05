@@ -1,22 +1,30 @@
 open Syntax
+open Common
 
 exception Occurs_check
 exception Unify_error
+exception Missing_dictionnary
 
 let ntvar = ref 0
 let newtvar () = let n = !ntvar in ntvar := n + 1; n
 
-let rec wrap_lam e = function
+let wrap_lam e l =
+  let rec aux e = function
     [] -> e
-  | (v, t) :: tl -> wrap_lam (Core.Lam (v, t, e)) tl
+  | (v, t) :: tl -> aux (Core.Lam (v, t, e)) tl
+  in aux e (List.rev l)
 
-let rec wrap_tlam e = function
+let wrap_tlam e l =
+  let rec aux e = function
     [] -> e
-  | hd :: tl -> wrap_tlam (Core.TLam (hd, e)) tl
+  | hd :: tl -> aux (Core.TLam (hd, e)) tl
+  in aux e (List.rev l)
 
-let rec wrap_dlam e = function
+let wrap_dlam e l =
+  let rec aux e = function
     [] -> e
-  | hd :: tl -> wrap_dlam (Core.DLam (hd, e)) tl
+  | hd :: tl -> aux (Core.DLam (hd, e)) tl
+  in aux e (List.rev l)
 
 let rec wrap_app e = function
     [] -> e
@@ -44,8 +52,12 @@ let app_subst_ctx =
     | (v, t) :: tl -> aux ((v, app_subst_scheme s t) :: acc) s tl
   in aux []
 
-let app_subst_env s {vctx} =
-  {vctx = app_subst_ctx s vctx}
+let app_subst_env s {vctx; dctx} =
+  {vctx = app_subst_ctx s vctx; dctx}
+
+let rec app_subst_constr s = function
+    [] -> []
+  | (v, t) :: tl -> (v, app_subst_stype s t) :: app_subst_constr s tl
 
 let rec app_subst_expr s =
   function
@@ -55,7 +67,7 @@ let rec app_subst_expr s =
   | Core.Lam (v, t, e) -> Core.Lam (v, app_subst_stype s t, app_subst_expr s e)
   | Core.Let (v, e, e') -> Core.Let (v, app_subst_expr s e, app_subst_expr s e')
   | Core.TLam (n, e) ->
-     Core.TLam (n, app_subst_expr (Common.remove_assoc_all n s) e)
+     Core.TLam (n, app_subst_expr (remove_assoc_all n s) e)
   | Core.TApp (e, t) -> Core.TApp (app_subst_expr s e, app_subst_stype s t)
   | Core.DVar (v, t) -> Core.DVar (v, app_subst_stype s t)
   | Core.Dict l -> Core.Dict (List.map (app_subst_expr s) l)
@@ -71,21 +83,21 @@ let (@@) s s' =
 let rec ftv_type bnd = function
     TVar v when List.mem v bnd -> []
   | TVar v -> [v]
-  | TFun (l, r) -> ftv_type bnd l @ ftv_type bnd r
-  | TCon (_, t) -> List.fold_left (@) [] (List.map (ftv_type bnd) t)
+  | TFun (l, r) -> ftv_type bnd l @: ftv_type bnd r
+  | TCon (_, t) -> List.fold_left (@:) [] (List.map (ftv_type bnd) t)
 
 let ftv_expr =
   let rec aux bnd = function
       Core.Let (_, e, e')
-    | Core.App (e, e') -> aux bnd e @ aux bnd e'
-    | Core.Lam (_, t, e) -> ftv_type bnd t @ aux bnd e
+    | Core.App (e, e') -> aux bnd e @: aux bnd e'
+    | Core.Lam (_, t, e) -> ftv_type bnd t @: aux bnd e
     | Core.TLam (v, e) -> aux (v :: bnd) e
     | Core.DLam ((_, t), e)
-    | Core.TApp (e, t) -> aux bnd e @ ftv_type bnd t
+    | Core.TApp (e, t) -> aux bnd e @: ftv_type bnd t
     | Core.Var _
     | Core.Deb _ -> []
     | Core.Proj (_, _, e) -> aux bnd e
-    | Core.Dict l -> List.fold_left (@) [] (List.map (aux bnd) l)
+    | Core.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
     | Core.DVar (_, t) -> ftv_type bnd t
   in aux []
 
@@ -102,7 +114,7 @@ let fdv =
     | Core.Lam (_, _, e) -> aux bnd e
     | Core.Let (_, e, e')
     | Core.App (e, e') -> aux bnd e @ aux bnd e'
-    | Core.Dict l -> List.fold_left (@) [] (List.map (aux bnd) l)
+    | Core.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
   in aux []
 
 let rec unify t t' =
@@ -120,26 +132,43 @@ let rec unify t t' =
   | t, TVar v | TVar v, t -> bind v t
   | _ -> raise Unify_error
 
-let inst v (Forall (b, c, t)) =
+let rec dict env k = function
+    (TVar _) as t -> Core.DVar (k, t)
+  | t ->
+     let rec fd_dict = function
+         [] -> raise Missing_dictionnary
+       | (_, k', _) :: tl when k <> k' ->
+          fd_dict tl
+       | ((Forall (_, _, t')) as s, _, v) :: tl ->
+          try
+            let _ = unify t t' in
+            s, v
+          with _ -> fd_dict tl
+     in
+     let t, v = fd_dict env.dctx in
+     let e, _ = inst env v t in
+     e
+
+and inst env v (Forall (b, c, t)) =
   let l = List.map (fun _ -> newtvar ()) b in
   let ta = (List.map (fun v -> TVar v) l) in
   let s = List.combine b ta in
-  wrap_tapp (wrap_app (Core.Var v)
-               (List.map (fun (v, t) -> Core.DVar (v, t)) c)) ta,
-  app_subst_stype s t
+  let t = app_subst_stype s t in
+  let c = app_subst_constr s c in
+  let d = List.map (fun (f, s) -> dict env f s) c in
+  wrap_app (wrap_tapp (Core.Var v) ta) d, t
 
 let gen e t =
   let ft = ftv_expr e in
   let fd = fdv e in
   wrap_tlam (wrap_dlam e fd) ft, Forall (ft, fd, t)
 
-let add_var {vctx} v t =
-  {vctx = (v, t) :: vctx}
+let add_var {vctx; dctx} v t =
+  {vctx = (v, t) :: vctx; dctx}
 
 let rec infer_expr env = function
     Var v ->
-
-     let e, t = inst v (List.assoc v env.vctx) in
+     let e, t = inst env v (List.assoc v env.vctx) in
      e, t, []
   | App (e, e') ->
      let e, t, s = infer_expr env e in

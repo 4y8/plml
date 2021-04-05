@@ -4,9 +4,9 @@ type stype
   | TCon of string * stype list
 [@@deriving show]
 
-type context = (string * stype) list
+type constr = (string * stype) list
 [@@deriving show]
-type scheme = Forall of int list * context * stype
+type scheme = Forall of int list * constr * stype
 [@@deriving show]
 
 type expr
@@ -16,13 +16,13 @@ type expr
   | Let of string * expr * expr
 
 type classdecl = {
-    ctx: context;
+    ctx: constr;
     name: string;
     members: (string * stype) list
   }
 
 type instdecl = {
-    ctx: context;
+    ctx: constr;
     name: string;
     ty: stype;
     decls: (string * expr) list
@@ -40,4 +40,5 @@ type toplevel
 
 type env = {
     vctx : (string * scheme) list;
+    dctx : (scheme * string * string) list
   }
