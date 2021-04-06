@@ -38,6 +38,7 @@ module F : sig
     | TApp of t * stype
     | Lit of lit
     | Let of t * t
+  [@@deriving show]
 end = struct
   type t
     = Var of int
@@ -48,6 +49,7 @@ end = struct
     | TApp of t * stype
     | Lit of lit
     | Let of t * t
+  [@@deriving show]
 end
 
 type vtype = V of string | D of stype
@@ -84,6 +86,8 @@ module U : sig
     | Dup of int list * t
     | GVar of string
     | Drop of int list * t
+  [@@deriving show]
+  val ($$) : t -> t -> t
 end = struct
   type t
     = Var of int
@@ -95,6 +99,8 @@ end = struct
     | Dup of int list * t
     | GVar of string
     | Drop of int list * t
+  [@@deriving show]
+  let ($$) e e' = App (e, e')
 end
 
 let ($$) e e' = U.App (e, e')

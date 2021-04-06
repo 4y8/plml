@@ -9,7 +9,7 @@ let (@:) l l' =
 
 let index e l =
   let rec aux n e = function
-      [] -> raise Not_found
+      [] -> -1
     | hd :: _ when hd = e -> n
     | _ :: tl -> aux (n + 1) e tl
   in aux 0 e l

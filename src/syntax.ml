@@ -10,6 +10,7 @@ type scheme = Forall of int list * constr * stype
 [@@deriving show]
 
 type lit = Int of int | Bool of bool
+  [@@deriving show]
 
 type expr
   = Var of string

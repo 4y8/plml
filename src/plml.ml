@@ -1,4 +1,5 @@
 open Type
+open Perceus
 open Syntax
 
 let bool = TCon ("Bool", [])
@@ -23,4 +24,10 @@ let _ =
   in
   let e, t = gen e t in
   print_endline (Core.IR.show e);
-  print_endline (show_scheme t)
+  print_endline (show_scheme t);
+  let p = Core.purify [] e in
+  print_endline (Core.F.show p);
+  let p = Core.erase p in
+  print_endline (Core.U.show p);
+  let p = annlin [] [] (Core.U.(Lam (Lam (Let (Var 0, Var 2))))) in
+  print_endline (Core.U.show p);
