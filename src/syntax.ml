@@ -40,5 +40,5 @@ type toplevel
 
 type env = {
     vctx : (string * scheme) list;
-    dctx : (scheme * string * string) list
+    dctx : (scheme * string) list
   }
