@@ -1,4 +1,5 @@
 open Syntax
+open Core
 open Common
 
 exception Occurs_check
@@ -11,28 +12,28 @@ let newtvar () = let n = !ntvar in ntvar := n + 1; n
 let wrap_lam e l =
   let rec aux e = function
     [] -> e
-  | (v, t) :: tl -> aux (Core.Lam (v, t, e)) tl
+  | (v, t) :: tl -> aux (IR.Lam (v, t, e)) tl
   in aux e (List.rev l)
 
 let wrap_tlam e l =
   let rec aux e = function
     [] -> e
-  | hd :: tl -> aux (Core.TLam (hd, e)) tl
+  | hd :: tl -> aux (IR.TLam (hd, e)) tl
   in aux e (List.rev l)
 
 let wrap_dlam e l =
   let rec aux e = function
     [] -> e
-  | hd :: tl -> aux (Core.DLam (hd, e)) tl
+  | hd :: tl -> aux (IR.DLam (hd, e)) tl
   in aux e (List.rev l)
 
 let rec wrap_app e = function
     [] -> e
-  | hd :: tl -> wrap_app (Core.App (e, hd)) tl
+  | hd :: tl -> wrap_app (IR.App (e, hd)) tl
 
 let rec wrap_tapp e = function
     [] -> e
-  | hd :: tl -> wrap_tapp (Core.TApp (e, hd)) tl
+  | hd :: tl -> wrap_tapp (IR.TApp (e, hd)) tl
 
 let rec app_subst_stype s =
   function
@@ -55,9 +56,8 @@ let app_subst_ctx =
 let app_subst_env s {vctx; dctx} =
   {vctx = app_subst_ctx s vctx; dctx}
 
-let rec app_subst_constr s = function
-    [] -> []
-  | (v, t) :: tl -> (v, app_subst_stype s t) :: app_subst_constr s tl
+let app_subst_constr s =
+  List.map (app_subst_stype s)
 
 let (@@) s s' =
   let v, t = List.split s' in
@@ -72,33 +72,31 @@ let rec ftv_type bnd = function
 
 let ftv_expr =
   let rec aux bnd = function
-      Core.Let (_, e, e')
-    | Core.App (e, e') -> aux bnd e @: aux bnd e'
-    | Core.Lam (_, t, e) -> ftv_type bnd t @: aux bnd e
-    | Core.TLam (v, e) -> aux (v :: bnd) e
-    | Core.DLam ((_, t), e)
-    | Core.TApp (e, t) -> aux bnd e @: ftv_type bnd t
-    | Core.Var _
-    | Core.Deb _ -> []
-    | Core.Proj (_, _, e) -> aux bnd e
-    | Core.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
-    | Core.DVar (_, t) -> ftv_type bnd t
+      IR.Let (_, e, e')
+    | IR.App (e, e') -> aux bnd e @: aux bnd e'
+    | IR.Lam (_, t, e) -> ftv_type bnd t @: aux bnd e
+    | IR.TLam (v, e) -> aux (v :: bnd) e
+    | IR.DLam (t, e)
+    | IR.TApp (e, t) -> aux bnd e @: ftv_type bnd t
+    | IR.Var _ -> []
+    | IR.Proj (_, _, e) -> aux bnd e
+    | IR.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
+    | IR.DVar t -> ftv_type bnd t
   in aux []
 
 let fdv =
   let rec aux bnd = function
-      Core.DVar (s, t) when List.mem (s, t) bnd -> []
-    | Core.DVar (s, t) -> [s, t]
-    | Core.DLam (t, e) -> aux (t :: bnd) e
-    | Core.Deb _
-    | Core.Var _ -> []
-    | Core.Proj (_, _, e)
-    | Core.TLam (_, e)
-    | Core.TApp (e, _)
-    | Core.Lam (_, _, e) -> aux bnd e
-    | Core.Let (_, e, e')
-    | Core.App (e, e') -> aux bnd e @ aux bnd e'
-    | Core.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
+      IR.DVar t when List.mem t bnd -> []
+    | IR.DVar t -> [t]
+    | IR.DLam (t, e) -> aux (t :: bnd) e
+    | IR.Var _ -> []
+    | IR.Proj (_, _, e)
+    | IR.TLam (_, e)
+    | IR.TApp (e, _)
+    | IR.Lam (_, _, e) -> aux bnd e
+    | IR.Let (_, e, e')
+    | IR.App (e, e') -> aux bnd e @ aux bnd e'
+    | IR.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
   in aux []
 
 let rec unify t t' =
@@ -116,27 +114,33 @@ let rec unify t t' =
   | t, TVar v | TVar v, t -> bind v t
   | _ -> raise Unify_error
 
-let rec dict env k = function
-    (TVar _) as t -> Core.DVar (k, t)
-  | t ->
-     let rec fd_dict = function
-         [] -> raise Missing_dictionnary
-       | (Forall (_, _, TCon (k', _)), _) :: tl when k <> k' ->
-          fd_dict tl
-       | (Forall (b, c, TCon (_, [t'])), v) :: tl ->
-          begin
-            try
-              let s = unify t t' in
-              let t' = app_subst_stype s t' in
-              let c' = app_subst_constr s  c in
-              let b' = List.filter (fun x -> List.assoc_opt x s = None) b in
-              let e, _ = inst env v (Forall (b', c', t')) in
-              e
-            with _ -> fd_dict tl
-            end
-       | _ -> raise Not_found
-     in
-     fd_dict env.dctx
+let rec dict env = function
+    (TCon (k, [t])) ->
+     begin
+       match t with
+         TVar _ -> IR.DVar (TCon (k, [t]))
+       | t ->
+          let rec fd_dict = function
+              [] -> raise Missing_dictionnary
+            | (Forall (_, _, TCon (k', _)), _) :: tl when k <> k' ->
+               fd_dict tl
+            | (Forall (b, c, TCon (_, [t'])), v) :: tl ->
+               begin
+                 try
+                   let s = unify t t' in
+                   let t' = app_subst_stype s t' in
+                   let c' = app_subst_constr s  c in
+                   let b' = List.filter
+                              (fun x -> List.assoc_opt x s = None) b in
+                   let e, _ = inst env v (Forall (b', c', t')) in
+                   e
+                 with _ -> fd_dict tl
+               end
+            | _ -> raise Not_found
+          in
+          fd_dict env.dctx
+       end
+  | _ -> raise Not_found (* Can't happen*)
 
 
 and inst env v (Forall (b, c, t)) =
@@ -145,27 +149,26 @@ and inst env v (Forall (b, c, t)) =
   let s = List.combine b ta in
   let t = app_subst_stype s t in
   let c = app_subst_constr s c in
-  let d = List.map (fun (f, s) -> dict env f s) c in
-  wrap_app (wrap_tapp (Core.Var v) ta) d, t
+  let d = List.map (fun t -> dict env t) c in
+  wrap_app (wrap_tapp (IR.Var v) ta) d, t
 
 let rec app_subst_expr s env e =
   let aux = app_subst_expr s env in
   match e with
-    Core.Var v -> Core.Var v
-  | Core.Deb n -> Core.Deb n
-  | Core.App (e, e') -> Core.App (aux e, aux e')
-  | Core.Lam (v, t, e) -> Core.Lam (v, app_subst_stype s t, aux e)
-  | Core.Let (v, e, e') -> Core.Let (v, aux e, aux e')
-  | Core.TLam (n, e) ->
-     Core.TLam (n, app_subst_expr (remove_assoc_all n s) env e)
-  | Core.TApp (e, t) -> Core.TApp (aux e, app_subst_stype s t)
-  | Core.DVar (v, t) ->
+    IR.Var v -> IR.Var v
+  | IR.App (e, e') -> IR.App (aux e, aux e')
+  | IR.Lam (v, t, e) -> IR.Lam (v, app_subst_stype s t, aux e)
+  | IR.Let (v, e, e') -> IR.Let (v, aux e, aux e')
+  | IR.TLam (n, e) ->
+     IR.TLam (n, app_subst_expr (remove_assoc_all n s) env e)
+  | IR.TApp (e, t) -> IR.TApp (aux e, app_subst_stype s t)
+  | IR.DVar t ->
      let t = app_subst_stype s t in
-     dict env v t
-  | Core.Dict l -> Core.Dict (List.map aux l)
-  | Core.DLam ((v, t), e) ->
-     Core.DLam ((v, app_subst_stype s t), aux e)
-  | Core.Proj (i, n, e) -> Core.Proj (i, n, aux e)
+     dict env t
+  | IR.Dict l -> IR.Dict (List.map aux l)
+  | IR.DLam (t, e) ->
+     IR.DLam (app_subst_stype s t, aux e)
+  | IR.Proj (i, n, e) -> IR.Proj (i, n, aux e)
 
 let gen e t =
   let ft = ftv_expr e in
@@ -184,15 +187,15 @@ let rec infer_expr env = function
      let e', t', s' = infer_expr (app_subst_env s env) e' in
      let tv = TVar (newtvar ()) in
      let s = (unify (app_subst_stype s t) (TFun (t', tv))) @@ s' @@ s in
-     Core.App (app_subst_expr s env e, app_subst_expr s env e'),
+     IR.App (app_subst_expr s env e, app_subst_expr s env e'),
      app_subst_stype s tv, s
   | Lam (v, e) ->
      let tv = TVar (newtvar ()) in
      let e, t', s = infer_expr (add_var env v (Forall ([], [], tv))) e in
      let t = app_subst_stype s tv in
-     Core.Lam (v, t, e), TFun (t, t'), s
+     IR.Lam (v, t, e), TFun (t, t'), s
   | Let (v, e, e') ->
      let e, t, s = infer_expr env e in
      let e, t = gen e t in
      let e', t', s' = infer_expr (add_var (app_subst_env s env) v t) e' in
-     Core.Let (v, e, e'), t', s' @@ s
+     IR.Let (v, e, e'), t', s' @@ s

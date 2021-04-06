@@ -4,10 +4,12 @@ type stype
   | TCon of string * stype list
 [@@deriving show]
 
-type constr = (string * stype) list
+type constr = stype list
 [@@deriving show]
 type scheme = Forall of int list * constr * stype
 [@@deriving show]
+
+type lit = Int of int | Bool of bool
 
 type expr
   = Var of string
@@ -42,3 +44,5 @@ type env = {
     vctx : (string * scheme) list;
     dctx : (scheme * string) list
   }
+
+type program = toplevel list

@@ -6,3 +6,10 @@ let rec remove_assoc_all x = function
 
 let (@:) l l' =
   l @ (List.filter (fun x -> not (List.mem x l)) l')
+
+let index e l =
+  let rec aux n e = function
+      [] -> raise Not_found
+    | hd :: _ when hd = e -> n
+    | _ :: tl -> aux (n + 1) e tl
+  in aux 0 e l
