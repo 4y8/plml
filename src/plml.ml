@@ -11,7 +11,8 @@ let env0 =
   {vctx =
      ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
       "succ", Forall ([], [], int => int)];
-   dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"]}
+   dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"];
+   cctx = []}
 
 let _ =
   let e, t, _ =
@@ -29,5 +30,5 @@ let _ =
   print_endline (Core.F.show p);
   let p = Core.erase p in
   print_endline (Core.U.show p);
-  let p = annlin [] [] (Core.U.(Lam (Lam (Let (Var 0, Var 2))))) in
+  let p = annlin [] [] p in
   print_endline (Core.U.show p);

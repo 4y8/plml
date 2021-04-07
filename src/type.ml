@@ -5,9 +5,17 @@ open Common
 exception Occurs_check
 exception Unify_error
 exception Missing_dictionnary
+exception Invalid_class_declaration
 
 let ntvar = ref 0
 let newtvar () = let n = !ntvar in ntvar := n + 1; n
+
+let dictvar = ref 0
+let newdictvar () = let n = !ntvar in ntvar := n + 1; "dict" ^ (string_of_int n)
+
+let gettyname = function
+    TCon (v, _) -> v
+  | _ -> failwith "The program did not know it was impossible so it did it"
 
 let wrap_lam e l =
   let rec aux e = function
@@ -53,8 +61,8 @@ let app_subst_ctx =
     | (v, t) :: tl -> aux ((v, app_subst_scheme s t) :: acc) s tl
   in aux []
 
-let app_subst_env s {vctx; dctx} =
-  {vctx = app_subst_ctx s vctx; dctx}
+let app_subst_env s {vctx; dctx; cctx} =
+  {vctx = app_subst_ctx s vctx; dctx; cctx}
 
 let app_subst_constr s =
   List.map (app_subst_stype s)
@@ -175,8 +183,11 @@ let gen e t =
   let fd = fdv e in
   wrap_tlam (wrap_dlam e fd) ft, Forall (ft, fd, t)
 
-let add_var {vctx; dctx} v t =
-  {vctx = (v, t) :: vctx; dctx}
+let add_var {vctx; dctx; cctx} v t =
+  {vctx = (v, t) :: vctx; dctx; cctx}
+
+let add_dict {vctx; dctx; cctx} v t =
+  {vctx; dctx = (t, v) :: dctx; cctx}
 
 let rec infer_expr env = function
     Var v ->
@@ -199,3 +210,61 @@ let rec infer_expr env = function
      let e, t = gen e t in
      let e', t', s' = infer_expr (add_var (app_subst_env s env) v t) e' in
      IR.Let (v, e, e'), t', s' @@ s
+
+let infer_class (c : classdecl) =
+  let kt = TCon (c.name, [TVar 0]) in
+  let n = List.length c.members in
+  let infer_decl i (v, t) =
+    v,
+    Forall ([0], [kt], t),
+    IR.(TLam (0, Lam ("dvar", kt, Proj (i, n, Var "dvar"))))
+  in
+  List.mapi infer_decl c.members
+
+let infer_instance env (i : instdecl) =
+  let v = newdictvar () in
+  let rec fdclass v = function
+      [] -> raise Not_found
+    | {name = v'; members = _} as d :: _ when v = v' ->
+       d
+    | _ :: tl -> fdclass v tl
+  in
+  let Forall (_, _, t) = i.ty in
+  let d = fdclass (gettyname t) env.cctx in
+  let rec map2class i = function
+      [] when i = [] -> []
+    | [] -> raise Invalid_class_declaration
+    | (v, t) :: tl ->
+       let decl = List.assoc v i in
+       let e, t', _ = infer_expr env decl in
+       let s = unify t t' in
+       let e = app_subst_expr s env e in
+       let i = List.remove_assoc v i in
+       e :: map2class i tl
+  in
+  let dct = map2class i.decls d.members in
+  v, i.ty, IR.Dict dct
+
+
+let infer_decl env (d : exprdecl) =
+  let e, t, _ = infer_expr env d.expr in
+  let e, t = gen e t in
+  d.name, t, e
+
+let rec infer_prog env = function
+    [] -> []
+  | Expr e :: tl ->
+     let v, t, e = infer_decl env e in
+     (v, e) :: infer_prog (add_var env v t) tl
+  | Class c :: tl ->
+     let l = infer_class c in
+     let rec getenv env expr = function
+         [] -> List.rev expr, env
+       | (v, t, e) :: tl ->
+          getenv (add_var env v t) ((v, e) :: expr) tl
+     in
+     let l, env = getenv env [] l in
+     l @ infer_prog env tl
+  | Instance i :: tl ->
+     let v, t, d = infer_instance env i in
+     (v, d) :: infer_prog (add_dict env v t) tl

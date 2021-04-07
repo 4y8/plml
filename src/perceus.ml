@@ -17,7 +17,7 @@ let (--) =
   in aux []
 
 let inc = List.map ((+) 1)
-let dec = List.map ((-) 1)
+let dec = List.map (Fun.flip (-) 1)
 
 let fv =
   let rec aux n = function
@@ -47,22 +47,22 @@ let rec annlin borrowed owned = function
      let e = annlin (borrowed @ o') (owned -- o') e in
      e $$ e'
   | Lam e when List.mem 0 (fv e) ->
-     let ys = inc (fv (Lam e)) in
-     let e = annlin [] (0 :: ys) e in
+     let ys = fv (Lam e) in
+     let e = annlin [] (0 :: inc ys) e in
      opt_dup (ys -- owned) (Clo (ys, e))
   | Lam e ->
      let ys = fv (Lam e) in
-     let e = annlin [] ys e in
+     let e = annlin [] (inc ys) e in
      opt_dup (ys -- owned) (Clo (ys, Drop ([0], e)))
   | Let (e, e') when List.mem 0 (fv e') ->
-     let o' = inter owned (fv e' -- [0]) in
+     let o' = inter owned (dec (fv e' -- [0])) in
      let e = annlin (borrowed @ o') (owned -- o') e in
-     let e' = annlin borrowed (0 :: o') e' in
+     let e' = annlin (inc borrowed) (0 :: inc o') e' in
      Let (e, e')
   | Let (e, e') ->
-     let o' = inter owned (fv e') in
-     let e = annlin (borrowed @ o') owned e in
-     let e' = annlin borrowed o' e' in
+     let o' = inter owned (dec (fv e')) in
+     let e = annlin (borrowed @ o') (owned -- o') e in
+     let e' = annlin (inc borrowed) (inc o') e' in
      Let (e, Drop ([0], e'))
   | GVar v -> GVar v
   | Lit l -> Lit l

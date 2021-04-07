@@ -1,3 +1,4 @@
 (executable
  (preprocess (pps ppx_deriving.show ppx_deriving.ord))
+ (libraries combo)
  (name plml))

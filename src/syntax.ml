@@ -19,15 +19,12 @@ type expr
   | Let of string * expr * expr
 
 type classdecl = {
-    ctx: constr;
     name: string;
     members: (string * stype) list
   }
 
 type instdecl = {
-    ctx: constr;
-    name: string;
-    ty: stype;
+    ty: scheme;
     decls: (string * expr) list
   }
 
@@ -43,7 +40,6 @@ type toplevel
 
 type env = {
     vctx : (string * scheme) list;
-    dctx : (scheme * string) list
+    dctx : (scheme * string) list;
+    cctx : classdecl list
   }
-
-type program = toplevel list
