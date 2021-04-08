@@ -14,15 +14,19 @@ let env0 =
    dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"];
    cctx = []}
 
+let test = "class Eq a where
+	a
+
+instance
+"
+
 let _ =
   let e, t, _ =
     infer_expr env0
-      (*
-        (Lam ("x", Lam ("y", App (App (Var "<", Var "x"), Var "y"))))
-       *)
       (Lam ("x", Let ("y", App (Var "succ", Var "x"),
                       App (App (Var "<", Var "x"), Var "y"))))
   in
+  List.iter (fun x -> print_endline (Lexer.show x)) (Lexer.lexer test);
   let e, t = gen e t in
   print_endline (Core.IR.show e);
   print_endline (show_scheme t);

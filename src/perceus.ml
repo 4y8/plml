@@ -1,6 +1,8 @@
 open Core.U
 open Common
 
+exception Linearity_error
+
 let inter =
   let rec aux acc l = function
       [] -> acc
@@ -66,9 +68,4 @@ let rec annlin borrowed owned = function
      Let (e, Drop ([0], e'))
   | GVar v -> GVar v
   | Lit l -> Lit l
-  | e ->
-     print_endline "borrowed:";
-     List.iter (fun x -> print_int x; print_newline ()) borrowed;
-     print_endline "owned:";
-     List.iter (fun x -> print_int x; print_newline ()) owned;
-     print_endline (show e); raise Not_found
+  | _ -> raise Linearity_error

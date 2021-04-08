@@ -12,5 +12,8 @@ type t
   | SARR
   | DARR
   | TYPE
+  | TAB of int
+  | BLK of t list
+[@@deriving show]
 
-val lexer : (char, t) Combo.parser
+val lexer : string -> t list
