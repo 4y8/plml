@@ -1,3 +1,5 @@
+let ($) f x = f x
+
 let rec remove_assoc_all x = function
     [] -> []
   | (a, _) as p :: tl -> if a = x

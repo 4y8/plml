@@ -12,8 +12,11 @@ type t
   | SARR
   | DARR
   | TYPE
+  | EQU
   | TAB of int
   | BLK of t list
 [@@deriving show]
 
 val lexer : string -> t list
+
+exception Invalid_program

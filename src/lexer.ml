@@ -16,6 +16,7 @@ type t
   | SARR
   | DARR
   | TYPE
+  | EQU
   | TAB of int
   | BLK of t list
 [@@deriving show]
@@ -23,7 +24,7 @@ type t
 let keywords = ["class", CLASS; "instance", INSTANCE; "let", LET; "in", IN;
                 "where", WHERE]
 
-let opsyms = [":", TYPE; "=>", DARR; "->", SARR]
+let opsyms = [":", TYPE; "=>", DARR; "->", SARR; "=", EQU]
 let syms = ['\\', LAM; '(', OPAR; ')', CPAR]
 
 let indent =
