@@ -13,8 +13,11 @@ type t
   | DARR
   | TYPE
   | EQU
+  | COMMA
   | TAB of int
-  | BLK of t list
+  | INDENT
+  | DEDENT
+  | NL
 [@@deriving show]
 
 val lexer : string -> t list

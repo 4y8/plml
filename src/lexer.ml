@@ -17,15 +17,18 @@ type t
   | DARR
   | TYPE
   | EQU
+  | COMMA
   | TAB of int
-  | BLK of t list
+  | INDENT
+  | DEDENT
+  | NL
 [@@deriving show]
 
 let keywords = ["class", CLASS; "instance", INSTANCE; "let", LET; "in", IN;
                 "where", WHERE]
 
 let opsyms = [":", TYPE; "=>", DARR; "->", SARR; "=", EQU]
-let syms = ['\\', LAM; '(', OPAR; ')', CPAR]
+let syms = ['\\', LAM; '(', OPAR; ')', CPAR; ',', COMMA]
 
 let indent =
   let isident = function
@@ -71,26 +74,17 @@ let newline_tab =
 let lex = newline_tab <|> (spaces *> op) <|> (spaces *> indent)
           <|> (spaces *> sym)
 
-let rec get_blk n acc = function
-    TAB _ :: ((TAB _ :: _) as l) -> get_blk n acc l
-  | TAB n' :: tl when n = n' -> BLK acc, tl
-  | (TAB n' :: _) as l when n > n' -> BLK acc, l
-  | TAB n' :: tl ->
-     let t, tl = get_blk n' [] tl in
-     get_blk n (acc @ [t]) tl
-  | t :: tl ->
-     get_blk n (acc @ [t]) tl
-  | [] -> BLK acc, []
+let rec get_indent n = function
+    [] -> NL :: List.init n (Fun.const DEDENT)
+  | TAB n' :: tl when n' > n ->
+     NL :: List.init (n' - n) (Fun.const INDENT) @ get_indent n' tl
+  | TAB n' :: tl when n' < n ->
+     NL :: List.init (n - n') (Fun.const DEDENT) @ get_indent n' tl
+  | TAB _ :: tl -> NL :: get_indent n tl
+  | t :: tl -> t :: get_indent n tl
 
 let lexer s =
   match many lex (explode s) with
     None -> raise Invalid_program
   | Some (t, _) ->
-     let rec lex_blk t =
-       match t with
-         [] -> []
-       | t ->
-          let blk, tl = get_blk 0 [] t in
-          blk :: lex_blk tl
-     in
-     lex_blk t
+     get_indent 0 t

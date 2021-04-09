@@ -14,7 +14,13 @@ let env0 =
    dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"];
    cctx = []}
 
-let test = "id x = x y"
+let test = "id x = x
+const x y =
+	x
+	x
+	x
+	x
+"
 
 let _ =
   let t = Lexer.lexer test in
