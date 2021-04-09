@@ -107,11 +107,11 @@ let fdv =
     | IR.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
   in aux []
 
+let bind v t =
+  if List.mem v (ftv_type [] t) then raise Occurs_check
+  else [v, t]
+
 let rec unify t t' =
-  let bind v t =
-    if List.mem v (ftv_type [] t) then raise Occurs_check
-    else [v, t]
-  in
   match t, t' with
     TCon (v, l), TCon (v', l') when v = v' ->
      List.fold_left (@@) [] (List.map2 unify l l')
@@ -122,33 +122,39 @@ let rec unify t t' =
   | t, TVar v | TVar v, t -> bind v t
   | _ -> raise Unify_error
 
+let rec unify_left t t' =
+  match t, t' with
+    TCon (v, l), TCon (v', l') when v = v' ->
+     List.fold_left (@@) [] (List.map2 unify l l')
+  | TFun (l, r), TFun (l', r') ->
+     let s = unify_left l l' in
+     let s' = unify_left (app_subst_stype s r) r' in
+     s @@ s'
+  | TVar v, t -> bind v t
+  | _ -> raise Unify_error
+
 let rec dict env = function
     (TCon (k, [t])) ->
-     begin
-       match t with
-         TVar _ -> IR.DVar (TCon (k, [t]))
-       | t ->
-          let rec fd_dict = function
-              [] -> raise Missing_dictionnary
-            | (Forall (_, _, TCon (k', _)), _) :: tl when k <> k' ->
-               fd_dict tl
-            | (Forall (b, c, TCon (_, [t'])), v) :: tl ->
-               begin
-                 try
-                   let s = unify t t' in
-                   let t' = app_subst_stype s t' in
-                   let c' = app_subst_constr s  c in
-                   let b' = List.filter
-                              (fun x -> List.assoc_opt x s = None) b in
-                   let e, _ = inst env v (Forall (b', c', t')) in
-                   e
-                 with _ -> fd_dict tl
-               end
-            | _ -> raise Not_found
-          in
-          fd_dict env.dctx
-       end
-  | _ -> raise Not_found (* Can't happen*)
+     let rec fd_dict = function
+         [] -> IR.DVar (TCon (k, [t]))
+       | (Forall (_, _, TCon (k', _)), _) :: tl when k <> k' ->
+          fd_dict tl
+       | (Forall (b, c, TCon (_, [t'])), v) :: tl ->
+          begin
+           try
+             let s = unify_left t t' in
+             let t' = app_subst_stype s t' in
+             let c' = app_subst_constr s  c in
+             let b' = List.filter
+                        (fun x -> List.assoc_opt x s = None) b in
+             let e, _ = inst env v (Forall (b', c', t')) in
+             e
+           with _ -> fd_dict tl
+          end
+       | _ -> raise Not_found
+     in
+     fd_dict env.dctx
+  | _ -> raise Not_found (* Can't happen *)
 
 
 and inst env v (Forall (b, c, t)) =

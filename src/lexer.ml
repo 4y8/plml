@@ -49,7 +49,7 @@ let indent =
 
 let op =
   let isop = function
-      '<' | '>' | '.' | '&' | '|' | '=' | ':' -> true
+      '<' | '>' | '.' | '&' | '|' | '=' | ':' | '-' | '+' -> true
       | _ -> false
   in
   let op2sym l =
@@ -75,11 +75,11 @@ let lex = newline_tab <|> (spaces *> op) <|> (spaces *> indent)
           <|> (spaces *> sym)
 
 let rec get_indent n = function
-    [] -> NL :: List.init n (Fun.const DEDENT)
+    [] ->  NL :: List.init n (Fun.const DEDENT) @ [NL]
   | TAB n' :: tl when n' > n ->
-     NL :: List.init (n' - n) (Fun.const INDENT) @ get_indent n' tl
+     List.init (n' - n) (Fun.const INDENT) @ get_indent n' tl
   | TAB n' :: tl when n' < n ->
-     NL :: List.init (n - n') (Fun.const DEDENT) @ get_indent n' tl
+     NL :: List.init (n - n') (Fun.const DEDENT) @ NL :: get_indent n' tl
   | TAB _ :: tl -> NL :: get_indent n tl
   | t :: tl -> t :: get_indent n tl
 

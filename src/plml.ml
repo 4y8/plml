@@ -14,13 +14,10 @@ let env0 =
    dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"];
    cctx = []}
 
-let test = "id x = x
-const x y =
-	x
-	x
-	x
-	x
-"
+let test = "class Eq a where
+	(==) : a -> a
+instance Eq Int where
+	(==) = primint"
 
 let _ =
   let t = Lexer.lexer test in
