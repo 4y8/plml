@@ -80,7 +80,6 @@ module U : sig
     = Var of int
     | Lam of t
     | App of t * t
-    | Let of t * t
     | Lit of lit
     | Clo of int list * t
     | Dup of int list * t
@@ -93,7 +92,6 @@ end = struct
     = Var of int
     | Lam of t
     | App of t * t
-    | Let of t * t
     | Lit of lit
     | Clo of int list * t
     | Dup of int list * t
@@ -112,5 +110,5 @@ let rec erase = function
   | F.Lam (_, e) -> U.Lam (erase e)
   | F.App (e, e') -> erase e $$ erase e'
   | F.Lit l -> U.Lit l
-  | F.Let (e, e') -> U.Let (erase e, erase e')
+  | F.Let (e, e') -> U.Lam (erase e') $$ erase e
   | F.GVar v -> U.GVar v

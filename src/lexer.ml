@@ -76,6 +76,7 @@ let lex = newline_tab <|> (spaces *> op) <|> (spaces *> indent)
 
 let rec get_indent n = function
     [] ->  NL :: List.init n (Fun.const DEDENT) @ [NL]
+  | TAB _ :: ((TAB _ :: _) as t) -> get_indent n t
   | TAB n' :: tl when n' > n ->
      List.init (n' - n) (Fun.const INDENT) @ get_indent n' tl
   | TAB n' :: tl when n' < n ->

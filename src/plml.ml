@@ -10,24 +10,28 @@ let (=>) l r = TFun (l, r)
 let env0 =
   {vctx =
      ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
-      "succ", Forall ([], [], int => int)];
+      "succ", Forall ([], [], int => int);
+      "primeqint", Forall ([], [], int => (int => bool))];
    dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"];
    cctx = []}
 
 let test = "class Eq a where
-	(==) : a -> a
+	(==) : a -> a -> Bool
 instance Eq Int where
-	(==) = primint"
+	(==) = primeqint
+id x =
+	x"
 
 let _ =
   let t = Lexer.lexer test in
   List.iter (fun x -> print_endline (Lexer.show x)) t;
   let p = Parser.parser t in
   List.iter (fun x -> print_endline (show_toplevel x)) p;
+  let tpd = infer_prog env0 p in
+  List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Core.IR.show e)) tpd;
   let e, t, _ =
     infer_expr env0
-      (Lam ("x", Let ("y", App (Var "succ", Var "x"),
-                      App (App (Var "<", Var "x"), Var "y"))))
+      (Lam ("x", Var "x"))
   in
   let e, t = gen e t in
   print_endline (Core.IR.show e);
@@ -38,3 +42,5 @@ let _ =
   print_endline (Core.U.show p);
   let p = annlin [] [] p in
   print_endline (Core.U.show p);
+  let c = Closure.closure_convert [] p in
+  print_endline (Closure.show c)

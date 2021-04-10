@@ -195,6 +195,9 @@ let add_var {vctx; dctx; cctx} v t =
 let add_dict {vctx; dctx; cctx} v t =
   {vctx; dctx = (t, v) :: dctx; cctx}
 
+let add_class {vctx; dctx; cctx} c =
+  {vctx; dctx; cctx = c :: cctx}
+
 let rec infer_expr env = function
     Var v ->
      let e, t = inst env v (List.assoc v env.vctx) in
@@ -251,7 +254,6 @@ let infer_instance env (i : instdecl) =
   let dct = map2class i.decls d.members in
   v, i.ty, IR.Dict dct
 
-
 let infer_decl env (d : exprdecl) =
   let e, t, _ = infer_expr env d.expr in
   let e, t = gen e t in
@@ -270,7 +272,7 @@ let rec infer_prog env = function
           getenv (add_var env v t) ((v, e) :: expr) tl
      in
      let l, env = getenv env [] l in
-     l @ infer_prog env tl
+     l @ infer_prog (add_class env c) tl
   | Instance i :: tl ->
      let v, t, d = infer_instance env i in
      (v, d) :: infer_prog (add_dict env v t) tl

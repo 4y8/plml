@@ -29,7 +29,6 @@ let fv =
     | Clo _
     | Var _ -> []
     | App (e, e') -> aux n e @: aux n e'
-    | Let (e, e') -> aux n e @: aux (n + 1) e'
     | Lam e -> aux (n + 1) e
     | Dup (_, e)
     | Drop (_, e) -> aux n e
@@ -56,16 +55,6 @@ let rec annlin borrowed owned = function
      let ys = fv (Lam e) in
      let e = annlin [] (inc ys) e in
      opt_dup (ys -- owned) (Clo (ys, Drop ([0], e)))
-  | Let (e, e') when List.mem 0 (fv e') ->
-     let o' = inter owned (dec (fv e' -- [0])) in
-     let e = annlin (borrowed @ o') (owned -- o') e in
-     let e' = annlin (inc borrowed) (0 :: inc o') e' in
-     Let (e, e')
-  | Let (e, e') ->
-     let o' = inter owned (dec (fv e')) in
-     let e = annlin (borrowed @ o') (owned -- o') e in
-     let e' = annlin (inc borrowed) (inc o') e' in
-     Let (e, Drop ([0], e'))
   | GVar v -> GVar v
   | Lit l -> Lit l
   | _ -> raise Linearity_error
