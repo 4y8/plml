@@ -31,7 +31,7 @@ let _ =
   List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Core.IR.show e)) tpd;
   let e, t, _ =
     infer_expr env0
-      (Lam ("x", Var "x"))
+      (Lam ("x", Lam ("y", Var "x")))
   in
   let e, t = gen e t in
   print_endline (Core.IR.show e);

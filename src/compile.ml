@@ -1,9 +1,16 @@
 open Closure
 open Common
 
-type world = { code : string; nlam : int }
+let compile_fun = Printf.sprintf "value
+%s(Value arg, Env env)
+{
+	%s
+	return %s;
+}"
 
-let new_world = { code = ""; nlam = 0 }
+type world = { glocode : string; nlam : int }
+
+let new_world = { glocode = ""; nlam = 0 }
 
 let (>>=) l r =
   fun w ->
@@ -25,21 +32,45 @@ let return v =
 let fail =
   fun _ -> None
 
-let add_code v { code; nlam } =
-  Some { code = code ^ v; nlam }
+let add_code v { glocode; nlam } =
+  Some { glocode = glocode ^ v; nlam }
 
-let new_lam () { code; nlam } =
-  Some ("lam" ^ string_of_int nlam, {code; nlam = nlam + 1})
+let new_lam () { glocode; nlam } =
+  Some ("lam" ^ string_of_int nlam, {glocode; nlam = nlam + 1})
 
 let compile_lit = function
-    Syntax.Int n -> return $ string_of_int n
-  | Syntax.Bool true -> return "1"
-  | Syntax.Bool false -> return "0"
+    Syntax.Int n -> return $ Printf.sprintf "(mkint(%d))" n
+  | Syntax.Bool true -> return "(mkint(1))"
+  | Syntax.Bool false -> return "(mkint(0))"
 
 let rec compile_expr = function
-    Lit c -> compile_lit c
-  | Arg -> return "arg"
-  | GVar v -> return $ Printf.sprintf "__%s" v
+    Lit c ->
+     let* c = compile_lit c in
+     return (c, "")
+  | Arg -> return ("arg", "")
+  | GVar v -> return (Printf.sprintf "__%s" v, "")
   | Dup (_, e) -> compile_expr e (* TODO - manage drop and dup *)
   | Drop (_, e) -> compile_expr e
-  | Env n -> return $ Printf.sprintf "(env[%d])" n
+  | Env n -> return (Printf.sprintf "(env[%d])" n, "")
+  | App (e, e') ->
+     let* f, fp = compile_expr e in
+     let* x, xp = compile_expr e' in
+     return (Printf.sprintf "(call_closure(%s, %s))" f x, fp ^ xp)
+  | Clo (l, e) ->
+     let* v, body = compile_expr e in
+     let* f = new_lam () in
+     let env = f ^ "_env" in
+     add_code (compile_fun f body v) >>
+     let preb = Printf.sprintf "Env %s = alloc_env(%d);"
+                  env (List.length l)
+     in
+     let rec get_env l acc n =
+       match l with
+         [] -> return acc
+       | hd :: tl ->
+          let* v, b = compile_expr hd in
+          let addnv = Printf.sprintf "add_env(%s, %s, %d);" env v n in
+          get_env tl (acc ^ b ^ addnv) (n + 1)
+     in
+     let* preb = get_env l preb 0 in
+     return (Printf.sprintf "(mkclosure(%s, %s))" f env, preb)
