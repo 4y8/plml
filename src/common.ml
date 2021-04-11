@@ -15,3 +15,7 @@ let index e l =
     | hd :: _ when hd = e -> n
     | _ :: tl -> aux (n + 1) e tl
   in aux 0 e l
+
+let smap f l =
+  let fl, fs = List.split l in
+  List.combine fl (List.map f fs)

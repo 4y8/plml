@@ -10,6 +10,15 @@ let id = function [] -> None
 
 let var = (fun v -> Var v) <$> id
 
+let opls = [["+"; "-"]; ["*"]]
+
+let parse_op =
+  let ops = List.map (List.map (fun x -> (fun l r -> App (App (Var x, l), r))
+                                         <$ sym (ID x))) opls
+  in
+  let ops = List.map choice ops in
+  List.fold_right chainl1 ops
+
 let rec let_ s =
   (fun v e e' -> Let (v, e, e')) <$ sym LET <*> id <* sym EQU <*> expr <* sym IN
   <*> expr $ s
@@ -20,9 +29,10 @@ and par s =
 and bloc s =
   sym INDENT *> expr <* sym NL <* sym DEDENT $ s
 and expr s =
-  chainl1
-    (return (fun e e' -> App (e, e')))
-    (let_ <|> var <|> lam <|> par <|> bloc) $ s
+  parse_op $
+    chainl1
+      (return (fun e e' -> App (e, e')))
+      (let_ <|> var <|> lam <|> par <|> bloc) $ s
 
 let wrap_lam e l =
   let rec aux e = function

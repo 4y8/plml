@@ -49,7 +49,7 @@ let indent =
 
 let op =
   let isop = function
-      '<' | '>' | '.' | '&' | '|' | '=' | ':' | '-' | '+' -> true
+      '<' | '>' | '.' | '&' | '|' | '=' | ':' | '-' | '+' | '*' | '/' -> true
       | _ -> false
   in
   let op2sym l =

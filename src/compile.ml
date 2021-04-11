@@ -49,7 +49,7 @@ let rec compile_expr = function
      let* c = compile_lit c in
      return (c, "")
   | Arg -> return ("arg", "")
-  | GVar v -> return (Printf.sprintf "__%s" v, "")
+  | GVar v -> return (Printf.sprintf "%s" v, "")
   | Dup (_, e) -> compile_expr e (* TODO - manage drop and dup *)
   | Drop (_, e) -> compile_expr e
   | Env n -> return (Printf.sprintf "(env[%d])" n, "")
@@ -81,3 +81,16 @@ let rec compile_expr = function
           return (preb, env)
      in
      return (Printf.sprintf "(mkclosure(%s, %s))" f env, preb)
+
+let compile_prog prog =
+  let rec monadic_compile_prog = function
+      [] -> return ""
+    | (v, e) :: tl ->
+       let* e, b = compile_expr e in 
+       let* tl = monadic_compile_prog tl in
+       return $ compile_fun v b e ^ tl
+  in
+  match monadic_compile_prog prog new_world with
+    None -> raise Lexer.Invalid_program
+  | Some (p, w) ->
+     w.glocode ^ p

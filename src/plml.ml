@@ -1,5 +1,4 @@
 open Type
-open Perceus
 open Syntax
 
 let bool = TCon ("Bool", [])
@@ -11,8 +10,12 @@ let env0 =
   {vctx =
      ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
       "succ", Forall ([], [], int => int);
-      "primeqint", Forall ([], [], int => (int => bool))];
-   dctx = [Forall ([], [], TCon ("Ord", [int])), "ordint"];
+      "primeqint", Forall ([], [], int => (int => bool));
+      "primaddint", Forall ([], [], int => (int => int));
+      "primmultint", Forall ([], [], int => (int => int));
+      "primdivint", Forall ([], [], int => (int => int));
+      "primsubint", Forall ([], [], int => (int => int))];
+   dctx = [];
    cctx = []}
 
 let test = "class Eq a where
@@ -20,35 +23,30 @@ let test = "class Eq a where
 instance Eq Int where
 	(==) = primeqint
 id x =
-	x"
+	x
+class Num a where
+	(+) : a -> a -> a
+	(-) : a -> a -> a
+	(*) : a -> a -> a
+	(/) : a -> a -> a
+instance Num Int where
+	(+) = primaddint
+	(-) = primsubint
+	(*) = primmultint
+	(/) = primdivint
+"
+
 
 let _ =
   let t = Lexer.lexer test in
   List.iter (fun x -> print_endline (Lexer.show x)) t;
   let p = Parser.parser t in
   List.iter (fun x -> print_endline (show_toplevel x)) p;
-  let tpd = infer_prog env0 p in
-  List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Core.IR.show e)) tpd;
-  let e, t, _ =
-    infer_expr env0
-      (Lam ("x", Var "x"))
-  in
-  let e, t = gen e t in
-  print_endline (Core.IR.show e);
-  print_endline (show_scheme t);
-  let p = Core.purify [] e in
-  print_endline (Core.F.show p);
-  let p = Core.erase p in
-  print_endline (Core.U.show p);
-  let p = annlin [] [] p in
-  print_endline (Core.U.show p);
-  let c = Closure.closure_convert [] p in
-  print_endline (Closure.show c);
-  let c = Compile.compile_expr c Compile.new_world in
-  match c with
-    Some (c, w) ->
-     let p =
-       w.glocode ^
-         Compile.compile_fun "main" (snd c) (fst c)
-     in print_string p;
-  | None -> raise Lexer.Invalid_program
+  let prog = infer_prog env0 p in
+  List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Core.IR.show e)) prog;
+  let pprog = Common.smap (Core.purify []) prog in
+  let eprog = Common.smap (Core.erase) pprog in
+  let lprog = Common.smap (Perceus.annlin [] []) eprog in
+  let cprog = Common.smap (Closure.closure_convert []) lprog in
+  List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Closure.show e)) cprog;
+  print_string (Compile.compile_prog cprog)
