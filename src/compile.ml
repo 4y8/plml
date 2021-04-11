@@ -6,7 +6,8 @@ let compile_fun = Printf.sprintf "value
 {
 	%s
 	return %s;
-}"
+}
+"
 
 type world = { glocode : string; nlam : int }
 
@@ -59,18 +60,24 @@ let rec compile_expr = function
   | Clo (l, e) ->
      let* v, body = compile_expr e in
      let* f = new_lam () in
-     let env = f ^ "_env" in
      add_code (compile_fun f body v) >>
-     let preb = Printf.sprintf "Env %s = alloc_env(%d);"
-                  env (List.length l)
-     in
-     let rec get_env l acc n =
+     let* preb, env =
        match l with
-         [] -> return acc
-       | hd :: tl ->
-          let* v, b = compile_expr hd in
-          let addnv = Printf.sprintf "add_env(%s, %s, %d);" env v n in
-          get_env tl (acc ^ b ^ addnv) (n + 1)
+         [] -> return ("", "NULL")
+       | l ->
+          let env = f ^ "_env" in
+          let preb =
+            Printf.sprintf "Env %s = alloc_env(%d);\n"
+              env (List.length l) in
+          let rec get_env l acc n =
+            match l with
+              [] -> return acc
+            | hd :: tl ->
+               let* v, b = compile_expr hd in
+               let addnv = Printf.sprintf "add_env(%s, %s, %d);\n" env v n in
+               get_env tl (acc ^ b ^ addnv) (n + 1)
+          in
+          let* preb = get_env l preb 0 in
+          return (preb, env)
      in
-     let* preb = get_env l preb 0 in
      return (Printf.sprintf "(mkclosure(%s, %s))" f env, preb)

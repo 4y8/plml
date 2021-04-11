@@ -30,3 +30,9 @@ alloc_env(size_t s)
 {
 	return malloc(s * sizeof(Value));
 }
+
+void
+add_env(Env e, Value v, int n)
+{
+	e[n] = v;
+}

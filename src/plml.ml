@@ -31,7 +31,7 @@ let _ =
   List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Core.IR.show e)) tpd;
   let e, t, _ =
     infer_expr env0
-      (Lam ("x", Lam ("y", Var "x")))
+      (Lam ("x", Var "x"))
   in
   let e, t = gen e t in
   print_endline (Core.IR.show e);
@@ -43,4 +43,12 @@ let _ =
   let p = annlin [] [] p in
   print_endline (Core.U.show p);
   let c = Closure.closure_convert [] p in
-  print_endline (Closure.show c)
+  print_endline (Closure.show c);
+  let c = Compile.compile_expr c Compile.new_world in
+  match c with
+    Some (c, w) ->
+     let p =
+       w.glocode ^
+         Compile.compile_fun "main" (snd c) (fst c)
+     in print_string p;
+  | None -> raise Lexer.Invalid_program
