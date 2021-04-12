@@ -9,7 +9,6 @@ let (=>) l r = TFun (l, r)
 let env0 =
   {vctx =
      ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
-      "succ", Forall ([], [], int => int);
       "primeqint", Forall ([], [], int => (int => bool));
       "primaddint", Forall ([], [], int => (int => int));
       "primmultint", Forall ([], [], int => (int => int));
@@ -22,8 +21,6 @@ let test = "class Eq a where
 	(==) : a -> a -> Bool
 instance Eq Int where
 	(==) = primeqint
-id x =
-	x
 class Num a where
 	(+) : a -> a -> a
 	(-) : a -> a -> a

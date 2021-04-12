@@ -9,9 +9,15 @@ let compile_fun = Printf.sprintf "value
 }
 "
 
-type world = { glocode : string; nlam : int }
+type world = { glocode : string; nlam : int; ids : (string * string) list }
 
-let new_world = { glocode = ""; nlam = 0 }
+let new_world = {
+    glocode = "";
+    nlam = 0;
+    ids = ["primeqint", "primeqint"; "primaddint", "primaddint";
+           "primmultint", "primmultint"; "primdivint", "primdivint";
+           "primsubint", "primsubint"]
+  }
 
 let (>>=) l r =
   fun w ->
@@ -33,11 +39,22 @@ let return v =
 let fail =
   fun _ -> None
 
-let add_code v { glocode; nlam } =
-  Some { glocode = glocode ^ v; nlam }
+let add_code v { glocode; nlam; ids } =
+  Some { glocode = glocode ^ v; nlam; ids }
 
-let new_lam () { glocode; nlam } =
-  Some ("lam" ^ string_of_int nlam, {glocode; nlam = nlam + 1})
+let new_lam () { glocode; nlam; ids } =
+  Some ("l" ^ string_of_int nlam, {glocode; nlam = nlam + 1; ids})
+
+let compile_id v w =
+  let add_var v v' {glocode; nlam; ids} =
+    Some {glocode; nlam; ids = (v, v') :: ids}
+  in
+  match List.assoc_opt v w.ids with
+    Some v -> return v w
+  | None ->
+     let m =
+       let* v' = new_lam () in add_var v' v >> return v'
+     in m w
 
 let compile_lit = function
     Syntax.Int n -> return $ Printf.sprintf "(mkint(%d))" n
@@ -49,7 +66,7 @@ let rec compile_expr = function
      let* c = compile_lit c in
      return (c, "")
   | Arg -> return ("arg", "")
-  | GVar v -> return (Printf.sprintf "%s" v, "")
+  | GVar v -> let* v = compile_id v in return (v, "")
   | Dup (_, e) -> compile_expr e (* TODO - manage drop and dup *)
   | Drop (_, e) -> compile_expr e
   | Env n -> return (Printf.sprintf "(env[%d])" n, "")
@@ -86,8 +103,9 @@ let compile_prog prog =
   let rec monadic_compile_prog = function
       [] -> return ""
     | (v, e) :: tl ->
-       let* e, b = compile_expr e in 
+       let* e, b = compile_expr e in
        let* tl = monadic_compile_prog tl in
+       let* v = compile_id v in
        return $ compile_fun v b e ^ tl
   in
   match monadic_compile_prog prog new_world with
