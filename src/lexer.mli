@@ -14,6 +14,7 @@ type t
   | TYPE
   | EQU
   | COMMA
+  | INT of int
   | TAB of int
   | INDENT
   | DEDENT

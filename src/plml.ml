@@ -6,18 +6,19 @@ let int = TCon ("Int", [])
 
 let (=>) l r = TFun (l, r)
 
-let env0 =
-  {vctx =
-     ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
-      "primeqint", Forall ([], [], int => (int => bool));
-      "primaddint", Forall ([], [], int => (int => int));
-      "primmultint", Forall ([], [], int => (int => int));
-      "primdivint", Forall ([], [], int => (int => int));
-      "primsubint", Forall ([], [], int => (int => int))];
-   dctx = [];
-   cctx = []}
+let env0 = {
+    vctx =
+      ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
+       "primeqint", Forall ([], [], int => (int => bool));
+       "primaddint", Forall ([], [], int => (int => int));
+       "primmultint", Forall ([], [], int => (int => int));
+       "primdivint", Forall ([], [], int => (int => int));
+       "primsubint", Forall ([], [], int => (int => int))];
+    dctx = [];
+    cctx = []
+  }
 
-let test = "class Eq a where
+let test1 = "class Eq a where
 	(==) : a -> a -> Bool
 instance Eq Int where
 	(==) = primeqint
@@ -31,19 +32,19 @@ instance Num Int where
 	(-) = primsubint
 	(*) = primmultint
 	(/) = primdivint
-"
 
+main = \\x y -> x + y
+             "
+
+let test = "main = let x = \\x y -> primaddint x y in 1"
 
 let _ =
   let t = Lexer.lexer test in
-  List.iter (fun x -> print_endline (Lexer.show x)) t;
   let p = Parser.parser t in
-  List.iter (fun x -> print_endline (show_toplevel x)) p;
   let prog = infer_prog env0 p in
-  List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Core.IR.show e)) prog;
   let pprog = Common.smap (Core.purify []) prog in
   let eprog = Common.smap (Core.erase) pprog in
   let lprog = Common.smap (Perceus.annlin [] []) eprog in
   let cprog = Common.smap (Closure.closure_convert []) lprog in
-  List.iter (fun (v, e) -> Printf.printf "%s: %s\n" v (Closure.show e)) cprog;
+  List.iter (fun (_, c) -> print_endline (Closure.show c)) cprog;
   print_string (Compile.compile_prog cprog)

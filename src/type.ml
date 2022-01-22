@@ -86,6 +86,7 @@ let ftv_expr =
     | IR.TLam (v, e) -> aux (v :: bnd) e
     | IR.DLam (t, e)
     | IR.TApp (e, t) -> aux bnd e @: ftv_type bnd t
+    | IR.Lit _
     | IR.Var _ -> []
     | IR.Proj (_, _, e) -> aux bnd e
     | IR.Dict l -> List.fold_left (@:) [] (List.map (aux bnd) l)
@@ -97,6 +98,7 @@ let fdv =
       IR.DVar t when List.mem t bnd -> []
     | IR.DVar t -> [t]
     | IR.DLam (t, e) -> aux (t :: bnd) e
+    | IR.Lit _
     | IR.Var _ -> []
     | IR.Proj (_, _, e)
     | IR.TLam (_, e)
@@ -125,7 +127,7 @@ let rec unify t t' =
 let rec unify_left t t' =
   match t, t' with
     TCon (v, l), TCon (v', l') when v = v' ->
-     List.fold_left (@@) [] (List.map2 unify l l')
+     List.fold_left (@@) [] (List.map2 unify_left l l')
   | TFun (l, r), TFun (l', r') ->
      let s = unify_left l l' in
      let s' = unify_left (app_subst_stype s r) r' in
@@ -142,7 +144,7 @@ let rec dict env = function
        | (Forall (b, c, TCon (_, [t'])), v) :: tl ->
           begin
            try
-             let s = unify_left t t' in
+             let s = unify_left t' t in
              let t' = app_subst_stype s t' in
              let c' = app_subst_constr s  c in
              let b' = List.filter
@@ -170,6 +172,7 @@ let rec app_subst_expr s env e =
   let aux = app_subst_expr s env in
   match e with
     IR.Var v -> IR.Var v
+  | IR.Lit l -> IR.Lit l
   | IR.App (e, e') -> IR.App (aux e, aux e')
   | IR.Lam (v, t, e) -> IR.Lam (v, app_subst_stype s t, aux e)
   | IR.Let (v, e, e') -> IR.Let (v, aux e, aux e')
@@ -219,6 +222,10 @@ let rec infer_expr env = function
      let e, t = gen e t in
      let e', t', s' = infer_expr (add_var (app_subst_env s env) v t) e' in
      IR.Let (v, e, e'), t', s' @@ s
+  | Lit l ->
+     match l with
+       Bool _ -> IR.Lit l, TCon ("bool", []), []
+     | Int _ -> IR.Lit l, TCon ("int", []), []
 
 let infer_class (c : classdecl) =
   let kt = TCon (c.name, [TVar 0]) in

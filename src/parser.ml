@@ -8,22 +8,32 @@ let id = function [] -> None
                 | ID v :: tl -> Some (v, tl)
                 | _ -> None
 
+let int = function [] -> None
+                 | INT n :: tl -> Some (Lit (Int n), tl)
+                 | _ -> None
+
 let var = (fun v -> Var v) <$> id
 
 let opls = [["+"; "-"]; ["*"]]
 
 let parse_op =
   let ops = List.map (List.map (fun x -> (fun l r -> App (App (Var x, l), r))
-                                         <$ sym (ID x))) opls
+                                         <$ sym (OP x))) opls
   in
   let ops = List.map choice ops in
   List.fold_right chainl1 ops
+
+let wrap_lam e l =
+  let rec aux e = function
+      [] -> e
+    | hd :: tl -> aux (Lam (hd, e)) tl
+  in aux e (List.rev l)
 
 let rec let_ s =
   (fun v e e' -> Let (v, e, e')) <$ sym LET <*> id <* sym EQU <*> expr <* sym IN
   <*> expr $ s
 and lam s =
-  (fun v e -> Lam (v, e)) <$ sym LAM <*> id <* sym SARR <*> expr $ s
+  (fun l e -> wrap_lam e l) <$ sym LAM <*> many id <* sym SARR <*> expr $ s
 and par s =
   between (sym OPAR) expr (sym CPAR) $ s
 and bloc s =
@@ -32,13 +42,7 @@ and expr s =
   parse_op $
     chainl1
       (return (fun e e' -> App (e, e')))
-      (let_ <|> var <|> lam <|> par <|> bloc) $ s
-
-let wrap_lam e l =
-  let rec aux e = function
-      [] -> e
-    | hd :: tl -> aux (Lam (hd, e)) tl
-  in aux e (List.rev l)
+      (let_ <|> var <|> lam <|> par <|> bloc <|> int) $ s
 
 let parse_decl =
   (fun v l e -> v, wrap_lam e l) <$> id <*> many id <* sym EQU <*> expr

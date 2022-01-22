@@ -16,6 +16,7 @@ type expr
   = Var of string
   | Lam of string * expr
   | App of expr * expr
+  | Lit of lit
   | Let of string * expr * expr
 [@@deriving show]
 

@@ -7,6 +7,7 @@ typedef void **Env;
 typedef void *Value;
 typedef Value (*Fun)(Value, Env);
 struct closure {
+	int ref;
 	Fun f;
 	Env env;
 };
@@ -19,5 +20,8 @@ Value call_closure(Closure, Value);
 
 Env alloc_env(size_t);
 void add_env(Env, Value, int);
+
+void drop(Value);
+void dup(Value);
 
 #endif

@@ -18,6 +18,7 @@ type t
   | TYPE
   | EQU
   | COMMA
+  | INT of int
   | TAB of int
   | INDENT
   | DEDENT
@@ -47,6 +48,9 @@ let indent =
   in
   id2keyword_opt <$> (List.cons <$> letter <*> many id)
 
+let int =
+  (fun n -> INT (int_of_string (inplode n))) <$> (many1 digit)
+
 let op =
   let isop = function
       '<' | '>' | '.' | '&' | '|' | '=' | ':' | '-' | '+' | '*' | '/' -> true
@@ -72,7 +76,7 @@ let newline_tab =
   newline *> ((fun x -> TAB (List.length x)) <$> many tab)
 
 let lex = newline_tab <|> (spaces *> op) <|> (spaces *> indent)
-          <|> (spaces *> sym)
+          <|> (spaces *> sym) <|> (spaces *> int)
 
 let rec get_indent n = function
     [] ->  NL :: List.init n (Fun.const DEDENT) @ [NL]

@@ -6,6 +6,7 @@ module IR : sig
     | Lam of string * stype * t
     | App of t * t
     | Let of string * t * t
+    | Lit of lit
     | TLam of int * t
     | TApp of t * stype
     | Proj of int * int * t
@@ -19,6 +20,7 @@ end = struct
     | Lam of string * stype * t
     | App of t * t
     | Let of string * t * t
+    | Lit of lit
     | TLam of int * t
     | TApp of t * stype
     | Proj of int * int * t
@@ -74,6 +76,7 @@ let rec purify env = function
          [] -> F.GVar "Nil"
        | hd :: tl -> F.(GVar "::" $$ purify env hd $$ enc tl)
      in enc l
+  | IR.Lit l -> F.Lit l
 
 module U : sig
   type t
