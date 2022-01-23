@@ -15,7 +15,7 @@ let new_world = {
     glocode = "";
     nlam = 0;
     ids = ["primeqint", "primeqint"; "primaddint", "primaddint";
-           "primmultint", "primmultint"; "primdivint", "primdivint";
+           "primmulint", "primmulint"; "primdivint", "primdivint";
            "primsubint", "primsubint"]
   }
 
@@ -86,7 +86,7 @@ and compile_expr = function
      let l = List.map (Printf.sprintf "drop(%s);") l in
      let drop = List.fold_left (^) "" l in
      return (e, drop ^ b)
-  | Env n -> return (Printf.sprintf "(env[%d])" n, "")
+  | Env n -> return (Printf.sprintf "(env.p[%d])" n, "")
   | App (e, e') ->
      let* f, fp = compile_expr e in
      let* x, xp = compile_expr e' in
@@ -129,4 +129,5 @@ let compile_prog prog =
     None -> raise Lexer.Invalid_program
   | Some (p, w) ->
      let main = List.assoc "main" w.ids in
-     w.glocode ^ p ^ Printf.sprintf "int main(){return %s(0, null_env);}" main
+     "#include \"c/plml.h\"\n" ^ w.glocode ^ p ^
+       Printf.sprintf "int main(){return ((long)%s(0, null_env)) >> 1;}" main

@@ -28,6 +28,15 @@ void add_env(Env, Value, int);
 void drop(Value);
 void dup(Value);
 
+Value primeqint(Value, Env);
+
+Value primaddint(Value, Env);
+Value primsubint(Value, Env);
+Value primmulint(Value, Env);
+Value primdivint(Value, Env);
+
 extern Env null_env;
+extern Value true;
+extern Value false;
 
 #endif

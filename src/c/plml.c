@@ -6,6 +6,8 @@ static void dup_env(Env env);
 static void drop_env(Env env);
 
 Env null_env = {.size = 0, .p = NULL};
+Value true = (Value)((1 << 3) | 1);
+Value false = (Value)((0 << 3) | 1);
 
 static void
 dup_env(Env env)

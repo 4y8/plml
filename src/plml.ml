@@ -11,7 +11,7 @@ let env0 = {
       ["<", Forall ([0], [TCon ("Ord", [TVar 0])], TVar 0 => (TVar 0 => bool));
        "primeqint", Forall ([], [], int => (int => bool));
        "primaddint", Forall ([], [], int => (int => int));
-       "primmultint", Forall ([], [], int => (int => int));
+       "primmutint", Forall ([], [], int => (int => int));
        "primdivint", Forall ([], [], int => (int => int));
        "primsubint", Forall ([], [], int => (int => int))];
     dctx = [];
@@ -30,13 +30,12 @@ class Num a where
 instance Num Int where
 	(+) = primaddint
 	(-) = primsubint
-	(*) = primmultint
+	(*) = primmulint
 	(/) = primdivint
 
-main = \\x y -> x + y
-             "
+main = \\x y -> x + y"
 
-let test = "main = let x = \\x y -> x in 1"
+let test = "main = let x = \\x y -> x in x 6 2"
 
 let _ =
   let t = Lexer.lexer test in
@@ -46,5 +45,4 @@ let _ =
   let eprog = Common.smap (Core.erase) pprog in
   let lprog = Common.smap (Perceus.annlin [] []) eprog in
   let cprog = Common.smap (Closure.closure_convert []) lprog in
-  List.iter (fun (_, c) -> print_endline (Closure.show c)) cprog;
   print_string (Compile.compile_prog cprog)
