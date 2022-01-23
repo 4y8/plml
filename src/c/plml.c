@@ -2,6 +2,25 @@
 
 #include "plml.h"
 
+static void dup_env(Env env);
+static void drop_env(Env env);
+
+Env null_env = {.size = 0, .p = NULL};
+
+static void
+dup_env(Env env)
+{
+	for (int i = 0; i < env.size; ++i)
+		dup(env.p[i]);
+}
+
+static void
+drop_env(Env env)
+{
+	for (int i = 0; i < env.size; ++i)
+		drop(env.p[i]);
+}
+
 Value
 mkint(long n)
 {
@@ -21,32 +40,44 @@ mkclosure(Fun f, Env env)
 }
 
 Value
-call_closure(Closure f, Value x)
+call_closure(Value f, Value x)
 {
-	return f.f(x, f.env);
+	Closure *c;
+	Value r;
+
+	c = (Closure *)f;
+	dup_env(c->env);
+	r = c->f(x, c->env);
+	drop(f);
+	return r;
 }
 
 Env
-alloc_env(size_t s)
+alloc_env(int s)
 {
-	return malloc(s * sizeof(Value));
+	return (Env){.size = s, .p = malloc(s * sizeof(Value))};
 }
 
 void
 add_env(Env e, Value v, int n)
 {
-	e[n] = v;
+	e.p[n] = v;
 }
 
 void
 drop(Value v)
 {
 	switch (((long)v) & 0b111) {
-	case 0:
-		((Closure *)v)->ref -= 1;
-		if (((Closure *)v)->env)
-			free(((Closure *)v)->env);
+	case 0: {
+		Closure *c = (Closure *)v;
+		c->ref -= 1;
+		if (c->ref == 0) {
+			drop_env(c->env);
+			free(c->env.p);
+			free(c);
+		}
 		break;
+	}
 	case 1:
 		break;
 	}
@@ -55,5 +86,11 @@ drop(Value v)
 void
 dup(Value v)
 {
+	switch (((long)v) & 0b111) {
+	case 0:
+		((Closure *)v)->ref += 1;
+		break;
+	case 1:
+		break;
+	}
 }
-

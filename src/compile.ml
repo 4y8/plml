@@ -1,7 +1,7 @@
 open Closure
 open Common
 
-let compile_fun = Printf.sprintf "value
+let compile_fun = Printf.sprintf "Value
 %s(Value arg, Env env)
 {
 	%s
@@ -53,7 +53,7 @@ let compile_id v w =
     Some v -> return v w
   | None ->
      let m =
-       let* v' = new_lam () in add_var v' v >> return v'
+       let* v' = new_lam () in add_var v v' >> return v'
      in m w
 
 let compile_lit = function
@@ -61,14 +61,31 @@ let compile_lit = function
   | Syntax.Bool true -> return "(mkint(1))"
   | Syntax.Bool false -> return "(mkint(0))"
 
-let rec compile_expr = function
+let rec compile_list = function
+    [] -> return []
+  | hd :: tl ->
+     let* v, _ = compile_expr hd in
+     let* tl = compile_list tl in
+     return (v :: tl)
+
+and compile_expr = function
     Lit c ->
      let* c = compile_lit c in
      return (c, "")
   | Arg -> return ("arg", "")
   | GVar v -> let* v = compile_id v in return (v, "")
-  | Dup (_, e) -> compile_expr e (* TODO - manage drop and dup *)
-  | Drop (_, e) -> compile_expr e
+  | Dup (l, e) ->
+     let* e, b = compile_expr e in
+     let* l = compile_list l in
+     let l = List.map (Printf.sprintf "dup(%s);") l in
+     let dup = List.fold_left (^) "" l in
+     return (e, dup ^ b)
+  | Drop (l, e) ->
+     let* e, b = compile_expr e in
+     let* l = compile_list l in
+     let l = List.map (Printf.sprintf "drop(%s);") l in
+     let drop = List.fold_left (^) "" l in
+     return (e, drop ^ b)
   | Env n -> return (Printf.sprintf "(env[%d])" n, "")
   | App (e, e') ->
      let* f, fp = compile_expr e in
@@ -80,7 +97,7 @@ let rec compile_expr = function
      add_code (compile_fun f body v) >>
      let* preb, env =
        match l with
-         [] -> return ("", "NULL")
+         [] -> return ("", "null_env")
        | l ->
           let env = f ^ "_env" in
           let preb =
@@ -111,4 +128,5 @@ let compile_prog prog =
   match monadic_compile_prog prog new_world with
     None -> raise Lexer.Invalid_program
   | Some (p, w) ->
-     w.glocode ^ p
+     let main = List.assoc "main" w.ids in
+     w.glocode ^ p ^ Printf.sprintf "int main(){return %s(0, null_env);}" main

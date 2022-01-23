@@ -36,7 +36,7 @@ instance Num Int where
 main = \\x y -> x + y
              "
 
-let test = "main = let x = \\x y -> primaddint x y in 1"
+let test = "main = let x = \\x y -> x in 1"
 
 let _ =
   let t = Lexer.lexer test in
