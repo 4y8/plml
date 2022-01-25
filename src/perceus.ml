@@ -30,8 +30,10 @@ let fv =
     | Var _ -> []
     | App (e, e') -> aux n e @: aux n e'
     | Lam e -> aux (n + 1) e
+    | Proj (_, e)
     | Dup (_, e)
     | Drop (_, e) -> aux n e
+    | Dict l -> List.fold_left (@:) [] (List.map (aux n) l)
   in aux 0
 
 let opt_dup l e =
@@ -57,4 +59,10 @@ let rec annlin borrowed owned = function
      opt_dup (ys -- owned) (Clo (ys, Drop ([0], e)))
   | GVar v -> GVar v
   | Lit l -> Lit l
+  | Proj (n, e) ->
+     let e = annlin borrowed owned e in
+     Proj (n, e)
+  | Dict l ->
+     (* Dict should only be used on top-level, so it should use no variable. *)
+     Dict (List.map (annlin [] []) l)
   | _ -> raise Linearity_error

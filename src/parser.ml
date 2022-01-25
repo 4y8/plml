@@ -37,7 +37,7 @@ and lam s =
 and par s =
   between (sym OPAR) expr (sym CPAR) $ s
 and bloc s =
-  sym INDENT *> expr <* sym NL <* sym DEDENT $ s
+  sym INDENT *> expr <* sym DEDENT $ s
 and expr s =
   parse_op $
     chainl1

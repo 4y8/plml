@@ -266,7 +266,8 @@ let infer_decl env (d : exprdecl) =
   let e, t = gen e t in
   d.name, t, e
 
-let rec infer_prog env = function
+let rec infer_prog env =
+  function
     [] -> []
   | Expr e :: tl ->
      let v, t, e = infer_decl env e in

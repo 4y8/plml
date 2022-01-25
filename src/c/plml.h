@@ -5,15 +5,15 @@
 
 typedef void *Value;
 typedef struct {
-	int size;
 	Value *p;
+	int size;
 } Env;
 
 typedef Value (*Fun)(Value, Env);
 struct closure {
-	int ref;
 	Fun f;
 	Env env;
+	int ref;
 };
 typedef struct closure Closure;
 

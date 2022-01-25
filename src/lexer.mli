@@ -16,6 +16,7 @@ type t
   | COMMA
   | INT of int
   | TAB of int
+  | KTAB of int
   | INDENT
   | DEDENT
   | NL

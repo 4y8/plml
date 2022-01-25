@@ -20,6 +20,7 @@ type t
   | COMMA
   | INT of int
   | TAB of int
+  | KTAB of int
   | INDENT
   | DEDENT
   | NL
@@ -78,18 +79,28 @@ let newline_tab =
 let lex = newline_tab <|> (spaces *> op) <|> (spaces *> indent)
           <|> (spaces *> sym) <|> (spaces *> int)
 
-let rec get_indent n = function
-    [] ->  NL :: List.init n (Fun.const DEDENT) @ [NL]
-  | TAB _ :: ((TAB _ :: _) as t) -> get_indent n t
-  | TAB n' :: tl when n' > n ->
-     List.init (n' - n) (Fun.const INDENT) @ get_indent n' tl
-  | TAB n' :: tl when n' < n ->
-     NL :: List.init (n - n') (Fun.const DEDENT) @ NL :: get_indent n' tl
-  | TAB _ :: tl -> NL :: get_indent n tl
-  | t :: tl -> t :: get_indent n tl
+let rec layout t l =
+  match t, l with
+    TAB _ :: ((TAB _ :: _) as t), _ -> layout t l
+  | TAB n :: tl, m :: _ when m = n ->
+     NL :: layout tl l
+  | TAB n :: _, m :: ms when n < m ->
+     NL :: DEDENT :: layout t ms
+  | TAB _ :: tl, _ ->
+     layout tl l
+  | WHERE :: TAB n :: tl, m :: _ when n > m ->
+     WHERE :: INDENT :: layout tl (n :: l)
+  | WHERE :: TAB n :: tl, [] when n > 0 ->
+     WHERE :: INDENT :: layout tl [n]
+  | t :: tl, _ ->
+     t :: layout tl l 
+  | [], _ :: ms ->
+     NL :: DEDENT :: layout [] ms
+  | [], [] ->
+     []
 
 let lexer s =
   match many lex (explode s) with
     None -> raise Invalid_program
   | Some (t, _) ->
-     get_indent 0 t
+     layout t [0]

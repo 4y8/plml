@@ -9,10 +9,11 @@ let compile_fun = Printf.sprintf "Value
 }
 "
 
-type world = { glocode : string; nlam : int; ids : (string * string) list }
+type world = { glocode : string; maincode : string; nlam : int; ids : (string * string) list }
 
 let new_world = {
     glocode = "";
+    maincode = "";
     nlam = 0;
     ids = ["primeqint", "primeqint"; "primaddint", "primaddint";
            "primmulint", "primmulint"; "primdivint", "primdivint";
@@ -39,15 +40,21 @@ let return v =
 let fail =
   fun _ -> None
 
-let add_code v { glocode; nlam; ids } =
-  Some { glocode = glocode ^ v; nlam; ids }
+let void =
+  fun w -> Some (w)
 
-let new_lam () { glocode; nlam; ids } =
-  Some ("l" ^ string_of_int nlam, {glocode; nlam = nlam + 1; ids})
+let add_code v { glocode; maincode; nlam; ids } =
+  Some { glocode = glocode ^ v; maincode; nlam; ids }
+
+let add_maincode v { glocode; maincode; nlam; ids } =
+  Some { glocode = glocode; maincode = maincode ^ v; nlam; ids }
+
+let new_lam () { glocode; maincode; nlam; ids } =
+  Some ("l" ^ string_of_int nlam, {glocode;  maincode; nlam = nlam + 1; ids})
 
 let compile_id v w =
-  let add_var v v' {glocode; nlam; ids} =
-    Some {glocode; nlam; ids = (v, v') :: ids}
+  let add_var v v' {glocode; maincode; nlam; ids} =
+    Some {glocode; maincode; nlam; ids = (v, v') :: ids}
   in
   match List.assoc_opt v w.ids with
     Some v -> return v w
@@ -115,19 +122,22 @@ and compile_expr = function
           return (preb, env)
      in
      return (Printf.sprintf "(mkclosure(%s, %s))" f env, preb)
+  | _ -> return ("", "")
 
 let compile_prog prog =
   let rec monadic_compile_prog = function
-      [] -> return ""
+      [] -> void
     | (v, e) :: tl ->
-       let* e, b = compile_expr e in
-       let* tl = monadic_compile_prog tl in
        let* v = compile_id v in
-       return $ compile_fun v b e ^ tl
+       add_code (Printf.sprintf "Value %s;" v) >>
+       let* e, b = compile_expr e in
+       add_maincode (b ^ Printf.sprintf "%s = %s;" v e) >>
+         monadic_compile_prog tl
   in
   match monadic_compile_prog prog new_world with
     None -> raise Lexer.Invalid_program
-  | Some (p, w) ->
+  | Some (w) ->
      let main = List.assoc "main" w.ids in
-     "#include \"c/plml.h\"\n" ^ w.glocode ^ p ^
-       Printf.sprintf "int main(){return ((long)%s(0, null_env)) >> 1;}" main
+     "#include \"c/plml.h\"\n" ^ w.glocode ^
+       Printf.sprintf "int main(){%s return (long)%s >> 1;}"
+         w.maincode main

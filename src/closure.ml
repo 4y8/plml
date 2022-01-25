@@ -9,6 +9,8 @@ type t
   | Dup of t list * t
   | Drop of t list * t
   | Lit of Syntax.lit
+  | Proj of int * t
+  | Dict of t list
 [@@deriving show]
 
 let rec closure_convert env =
@@ -22,4 +24,6 @@ let rec closure_convert env =
   | U.Dup (l, e) -> Dup (convert_list l, closure_convert env e)
   | U.Drop (l, e) -> Drop (convert_list l, closure_convert env e)
   | U.Clo (l, e) -> Clo (convert_list l, closure_convert l e)
+  | U.Proj (n, e) -> Proj (n, closure_convert env e)
+  | U.Dict l -> Dict (List.map (closure_convert env) l)
   | U.Lam _ -> raise Perceus.Linearity_error

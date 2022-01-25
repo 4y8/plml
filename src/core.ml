@@ -30,53 +30,6 @@ end = struct
   [@@deriving show]
 end
 
-module F : sig
-  type t
-    = Var of int
-    | GVar of string
-    | Lam of stype * t
-    | App of t * t
-    | TLam of int * t
-    | TApp of t * stype
-    | Lit of lit
-    | Let of t * t
-  [@@deriving show]
-end = struct
-  type t
-    = Var of int
-    | GVar of string
-    | Lam of stype * t
-    | App of t * t
-    | TLam of int * t
-    | TApp of t * stype
-    | Lit of lit
-    | Let of t * t
-  [@@deriving show]
-end
-
-type vtype = V of string | D of stype
-
-let ($$) e e' = F.App (e, e')
-
-let rec purify env = function
-    IR.Var v ->
-    let i = Common.index (V v) env in
-    if i = -1 then F.GVar v else F.Var i
-  | IR.App (e, e') -> purify env e $$ purify env e'
-  | IR.Lam (v, t, e) -> F.Lam (t, purify (V v :: env) e)
-  | IR.TLam (n, e) -> F.TLam (n, purify env e)
-  | IR.TApp (e, t) -> F.TApp (purify env e, t)
-  | IR.DVar d -> F.Var (Common.index (D d) env)
-  | IR.DLam (d, e) -> F.Lam (d, purify (D d :: env) e)
-  | IR.Let (v, e, e') -> F.Let (purify env e, purify (V v :: env) e')
-  | IR.Proj (i, n, e) ->
-     F.GVar "project" $$ F.Lit (Int i) $$ F.Lit (Int n) $$ purify env e
-  | IR.Dict l ->
-     let rec enc = function
-         [] -> F.GVar "Nil"
-       | hd :: tl -> F.(GVar "::" $$ purify env hd $$ enc tl)
-     in enc l
-  | IR.Lit l -> F.Lit l
 
 module U : sig
   type t
@@ -88,6 +41,8 @@ module U : sig
     | Dup of int list * t
     | GVar of string
     | Drop of int list * t
+    | Dict of t list
+    | Proj of int * t 
   [@@deriving show]
   val ($$) : t -> t -> t
 end = struct
@@ -100,18 +55,30 @@ end = struct
     | Dup of int list * t
     | GVar of string
     | Drop of int list * t
+    | Dict of t list
+    | Proj of int * t 
   [@@deriving show]
   let ($$) e e' = App (e, e')
 end
 
+type vtype = V of string | D of stype
+
 let ($$) e e' = U.App (e, e')
 
-let rec erase = function
-    F.Var n -> U.Var n
-  | F.TLam (_, e)
-  | F.TApp (e, _) -> erase e
-  | F.Lam (_, e) -> U.Lam (erase e)
-  | F.App (e, e') -> erase e $$ erase e'
-  | F.Lit l -> U.Lit l
-  | F.Let (e, e') -> U.Lam (erase e') $$ erase e
-  | F.GVar v -> U.GVar v
+let rec erase env = function
+    IR.Var v ->
+    let i = Common.index (V v) env in
+    if i = -1 then U.GVar v else U.Var i
+  | IR.App (e, e') -> erase env e $$ erase env e'
+  | IR.Lam (v, _, e) -> U.Lam (erase (V v :: env) e)
+  | IR.TApp (e, _)
+  | IR.TLam (_, e) -> erase env e
+  | IR.DVar d -> U.Var (Common.index (D d) env)
+  | IR.DLam (d, e) -> U.Lam (erase (D d :: env) e)
+  | IR.Let (v, e, e') -> U.Lam (erase (V v :: env) e') $$ erase env e
+  | IR.Proj (i, _, e) ->
+     U.Proj (i, erase env e)
+  | IR.Dict l ->
+     U.Dict (List.map (erase env) l)
+  | IR.Lit l -> U.Lit l
+
